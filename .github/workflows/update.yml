@@ -1,0 +1,27 @@
+name: 국채 금리 갱신
+on:
+  schedule:
+    - cron: '00 22 * * *'   # 매일 07:00 (한국시간)
+    - cron: '00 7 * * *'    # 매일 22:00 (한국시간) - 늦게 발표된 값 보완
+  workflow_dispatch: {}      # Actions 화면에서 'Run workflow'로 바로 실행
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 금리 받아오기
+        env:
+          ECOS_KEY: ${{ secrets.ECOS_KEY }}
+        run: python fetch_bonds.py
+      - name: 바뀐 값 저장
+        run: |
+          git config user.name  "bond-bot"
+          git config user.email "bond-bot@users.noreply.github.com"
+          git add data/bond.json
+          git diff --cached --quiet || git commit -m "국채 금리 갱신 $(date -u +%Y-%m-%d)"
+          git push
