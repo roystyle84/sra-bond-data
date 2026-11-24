@@ -62,9 +62,10 @@ def us():
     return csv_rows(get(f'https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10&cosd={start:%Y-%m-%d}'))
 
 def de():
-    return csv_rows(get('https://api.statistiken.bundesbank.de/rest/data/BBSIS/'
-                        'D.I.ZST.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A'
-                        f'?format=csv&lang=en&startPeriod={start:%Y-%m-%d}'))
+    # 독일 연방은행: 10년 지표물(현재 발행된 10년 만기 연방채) 수익률 — Bloomberg 독일 10년물과 같은 기준
+    # 전체 구간을 매번 통째로 받아 교체 (과거 값도 같은 시리즈로 통일)
+    return csv_rows(get('https://api.statistiken.bundesbank.de/rest/data/BBSSY/'
+                        'D.REN.EUR.A630.000000WT1010.A?format=csv&lang=en&startPeriod=1999-01-01'))
 
 def main():
     old = {}
@@ -83,7 +84,14 @@ def main():
         except Exception as e:
             err.append(f'{k}: {e}')
     data = {'t': dt.datetime.utcnow().strftime('%Y-%m-%dT%H:%MZ'), 'err': err}
+    # 독일은 전체 구간 보관 (받기 실패 시 직전 파일이 같은 시리즈일 때만 유지)
+    if 'de' in res and len(res['de']) > 1000:
+        data['de'] = sorted(res['de']); data['deSrc'] = 'WT1010'
+    elif old.get('deSrc') == 'WT1010':
+        data['de'] = old.get('de', []); data['deSrc'] = 'WT1010'
     for k in ('kr', 'us', 'de', 'usd', 'eur'):
+        if k == 'de' and 'deSrc' in data:
+            continue
         m = {d: v for d, v in old.get(k, [])}
         m.update({d: v for d, v in res.get(k, [])})
         data[k] = [[d, m[d]] for d in sorted(m)][-400:]      # 최근 400개 영업일만 보관
