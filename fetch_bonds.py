@@ -1,4 +1,4 @@
-"""한국·미국·독일 국채 10년물 일별 금리와 원/달러·원/유로 매매기준율(서울외국환중개 고시, 한국은행 ECOS 제공)을
+"""한국·미국·독일 국채 10년물 일별 금리와 원/달러·원/유로 매매기준율(서울외국환중개)을
 받아 data/bond.json 으로 저장 (GitHub Actions에서 매일 실행).
 공개 데이터만 다룹니다. 이 저장소에는 다른 데이터(Costar·RCA 등)를 절대 넣지 마세요."""
 import json, os, re, sys, urllib.request, datetime as dt
@@ -41,8 +41,22 @@ def ecos(stat, item):
     return out
 
 def kr():  return ecos('817Y002', '010210000')   # 시장금리(일별) 국고채 10년
-def usd(): return ecos('731Y001', '0000001')     # 원/미국달러 매매기준율
-def eur(): return ecos('731Y001', '0000003')     # 원/유로 매매기준율
+def smbs(ccy):
+    # 서울외국환중개 매매기준율 (엑셀 백데이터 Power Query와 같은 출처)
+    t = get(f'http://www.smbs.biz/ExRate/StdExRate_xml.jsp?arr_value={ccy}_{start:%Y-%m-%d}_{today:%Y-%m-%d}')
+    out = []
+    for yy, mm, dd, v in re.findall(r"label='(\d{2})\.(\d{2})\.(\d{2})'[^>]*?value='([\d.,]+)'", t):
+        out.append([f'20{yy}-{mm}-{dd}', float(v.replace(',', ''))])
+    if not out:
+        raise RuntimeError('서울외국환중개 응답 형식 오류')
+    return out
+
+def usd():
+    try: return smbs('USD')
+    except Exception: return ecos('731Y001', '0000001')   # 예비: 한국은행 ECOS 원/달러 매매기준율
+def eur():
+    try: return smbs('EUR')
+    except Exception: return ecos('731Y001', '0000003')   # 예비: 한국은행 ECOS 원/유로 매매기준율
 
 def us():
     return csv_rows(get(f'https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10&cosd={start:%Y-%m-%d}'))
